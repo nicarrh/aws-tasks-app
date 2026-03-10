@@ -18,15 +18,22 @@ function LoginForm({ navigation }: LoginProps) {
 	const styles = createStyles(colors);
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [isLoadingLogin, setisLoadingLogin] = useState(false);
 
 	const doLoginHandler = async () => {
 		try {
-			if (email.length && password.length) {
-				const res = await login(email, password);
-				console.log('response', res);
+			setisLoadingLogin(true);
+			const result = await login(email, password);
+
+			if (result?.mfaRequired) {
+				setisLoadingLogin(false);
+				navigation.navigate('ConfirmTotp');
+				return;
 			}
 		} catch (e) {
 			console.error(e);
+		} finally {
+			setisLoadingLogin(false);
 		}
 	};
 	const changeEmailHandler = (t: string) => {
@@ -60,8 +67,12 @@ function LoginForm({ navigation }: LoginProps) {
 				</View>
 
 				<View style={styles.buttons}>
-					<TouchableOpacity style={styles.primaryBtn} onPress={doLoginHandler}>
-						{loading ? (
+					<TouchableOpacity
+						style={styles.primaryBtn}
+						onPress={doLoginHandler}
+						disabled={!email?.length || !password?.length || isLoadingLogin}
+					>
+						{loading || isLoadingLogin ? (
 							<ActivityIndicator size={24} color={colors.surface} />
 						) : (
 							<Text style={styles.btnText}>Continuar</Text>

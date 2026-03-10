@@ -1,64 +1,18 @@
-import { SecurityStackParamList } from '@/app/navigation/types';
 import { useTheme } from '@react-navigation/native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
 import { useAuth } from '../../../hooks/useAuth';
 
-type Props = NativeStackScreenProps<SecurityStackParamList, 'SetupTotp'>;
-
-const SetupTotpScreen = ({ navigation }: Props) => {
-	const { setupTotp, verifyTotpSetup } = useAuth();
-	const { colors } = useTheme();
-
+const ConfirmTotpScreen = () => {
+	const [code, setCode] = useState('');
 	const inputRef = useRef<TextInput>(null);
 
-	const [qr, setQr] = useState('');
-	const [code, setCode] = useState('');
+	const { confirmTotp, loading, error } = useAuth();
+	const { colors } = useTheme();
 
-	useEffect(() => {
-		const load = async () => {
-			const result: any = await setupTotp();
-			setQr(result.otpUri);
-		};
-
-		load();
-	}, []);
-
-	const confirm = async () => {
-		try {
-			await verifyTotpSetup(code);
-
-			Toast.show({
-				type: 'success',
-				text1: '2FA activado',
-				text2: 'La autenticación en dos pasos se activó correctamente',
-			});
-
-			setTimeout(() => {
-				navigation.reset({
-					index: 0,
-					routes: [
-						{
-							name: 'App',
-							state: {
-								routes: [{ name: 'Tasks' }],
-							},
-						},
-					],
-				});
-			}, 800);
-		} catch (err) {
-			console.log('on error', err);
-			Toast.show({
-				type: 'error',
-				text1: 'Código inválido',
-				text2: 'Intenta nuevamente',
-			});
-		}
+	const handleConfirm = async () => {
+		const result = await confirmTotp(code);
 	};
 
 	const renderBoxes = () => {
@@ -119,7 +73,7 @@ const SetupTotpScreen = ({ navigation }: Props) => {
 					marginBottom: 10,
 				}}
 			>
-				Configurar autenticador
+				Verificación
 			</Text>
 
 			<Text
@@ -129,30 +83,7 @@ const SetupTotpScreen = ({ navigation }: Props) => {
 					marginBottom: 30,
 				}}
 			>
-				Escanea el código con tu app autenticadora
-			</Text>
-
-			{qr && (
-				<View
-					style={{
-						alignItems: 'center',
-						marginBottom: 40,
-						backgroundColor: '#fff',
-						padding: 20,
-						borderRadius: 16,
-					}}
-				>
-					<QRCode value={qr} size={180} />
-				</View>
-			)}
-
-			<Text
-				style={{
-					color: colors.text,
-					marginBottom: 10,
-				}}
-			>
-				Ingresa el código generado
+				Ingresa el código de tu aplicación autenticadora
 			</Text>
 
 			{renderBoxes()}
@@ -172,9 +103,20 @@ const SetupTotpScreen = ({ navigation }: Props) => {
 				}}
 			/>
 
+			{error && (
+				<Text
+					style={{
+						color: '#ff4d4f',
+						marginBottom: 20,
+					}}
+				>
+					{error}
+				</Text>
+			)}
+
 			<TouchableOpacity
-				onPress={confirm}
-				disabled={code.length !== 6}
+				onPress={handleConfirm}
+				disabled={code.length !== 6 || loading}
 				style={{
 					backgroundColor: code.length === 6 ? colors.primary : colors.border,
 					paddingVertical: 14,
@@ -189,11 +131,11 @@ const SetupTotpScreen = ({ navigation }: Props) => {
 						fontWeight: '600',
 					}}
 				>
-					Confirmar
+					{loading ? 'Verificando...' : 'Confirmar'}
 				</Text>
 			</TouchableOpacity>
 		</SafeAreaView>
 	);
 };
 
-export default SetupTotpScreen;
+export default ConfirmTotpScreen;
