@@ -1,45 +1,254 @@
+import { useNavigation } from '@react-navigation/native';
+import { CognitoRefreshToken, CognitoUser } from 'amazon-cognito-identity-js';
 import * as SecureStore from 'expo-secure-store';
 import { jwtDecode } from 'jwt-decode';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-
-import { CognitoRefreshToken, CognitoUser } from 'amazon-cognito-identity-js';
 import { AppState, AppStateStatus } from 'react-native';
+
 import { confirmUser, loginUser, logoutUser, registerUser } from '../infraestructure/cognito/auth.repository';
+
 import { userPool } from '../infraestructure/cognito/cognito.config';
 
-// dos minutos para expire token
 const BUFFER = 120;
+const FIVE_MINUTES = 5 * 60 * 1000;
 
 type AuthContextType = {
 	isUserLogged: boolean;
 	loading: boolean;
-	logout: () => Promise<void>;
-	login: (email: string, password: string) => void;
-	register: (email: string, password: string) => void;
-	confirmCode: (email: string, password: string) => void;
-	checkAndRefreshToken: () => Promise<string | null>;
 	error: string | null;
 	loadingSplash: boolean;
+
+	mfaRequired: boolean;
+	showTotpPrompt: boolean;
+	totpEnabled: boolean;
+
+	login: (email: string, password: string) => Promise<{ success: boolean; mfaRequired?: boolean }>;
+	logout: () => Promise<void>;
+	register: (email: string, password: string) => Promise<any>;
+	confirmCode: (email: string, code: string) => Promise<any>;
+
+	confirmTotp: (code: string) => Promise<any>;
+	setupTotp: () => Promise<any>;
+	verifyTotpSetup: (code: string) => Promise<any>;
+
+	acceptTotp: () => Promise<void>;
+	declineTotp: () => Promise<void>;
+
+	checkAndRefreshToken: () => Promise<string | null>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [isUserLogged, setIsUserLogged] = useState(false);
-	const appState = useRef<AppStateStatus>(AppState.currentState);
-	const [loadingSplash, setLoadingSplash] = useState(true);
+	const navigation = useNavigation();
 
-	const register = async (email: string, password: string) => {
+	const [loading, setLoading] = useState(false);
+	const [loadingSplash, setLoadingSplash] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+
+	const [isUserLogged, setIsUserLogged] = useState(false);
+
+	const [mfaRequired, setMfaRequired] = useState(false);
+	const [showTotpPrompt, setShowTotpPrompt] = useState(false);
+	const [totpEnabled, setTotpEnabled] = useState(false);
+
+	const cognitoUserRef = useRef<CognitoUser | null>(null);
+	const appState = useRef<AppStateStatus>(AppState.currentState);
+
+	const checkTotpPrompt = async () => {
+		const lastShown = await SecureStore.getItemAsync('totpPromptLastShown');
+
+		if (lastShown) {
+			const diff = Date.now() - Number(lastShown);
+			if (diff < FIVE_MINUTES) return;
+		}
+
+		const user = userPool.getCurrentUser();
+		if (!user) return;
+
+		user.getSession(() => {
+			user.getUserData((_, data) => {
+				const hasTotp = data?.UserMFASettingList?.includes('SOFTWARE_TOKEN_MFA');
+
+				setTotpEnabled(!!hasTotp);
+
+				if (!hasTotp) {
+					setShowTotpPrompt(true);
+				}
+			});
+		});
+	};
+
+	const acceptTotp = async () => {
+		await SecureStore.setItemAsync('totpPromptLastShown', Date.now().toString());
+
+		setShowTotpPrompt(false);
+
+		navigation.navigate('Security', {
+			screen: 'SetupTotp',
+		});
+	};
+
+	const declineTotp = async () => {
+		await SecureStore.setItemAsync('totpPromptLastShown', Date.now().toString());
+
+		setShowTotpPrompt(false);
+	};
+
+	const login = async (email: string, password: string): Promise<{ success: boolean; mfaRequired?: boolean }> => {
 		try {
 			setLoading(true);
 			setError(null);
 
-			await registerUser(email, password);
+			const result = await loginUser(email, password);
+
+			if (result.type === 'MFA_REQUIRED') {
+				cognitoUserRef.current = result.cognitoUser;
+				console.log('[AUTH] cognitoUser guardado:', cognitoUserRef.current.getUsername());
+				setMfaRequired(true);
+
+				return { success: false, mfaRequired: true };
+			}
+
+			const tokens = result.tokens;
+
+			await SecureStore.setItemAsync('accessToken', tokens.accessToken);
+			await SecureStore.setItemAsync('refreshToken', tokens.refreshToken);
+			await SecureStore.setItemAsync('idToken', tokens.idToken);
+			await SecureStore.setItemAsync('username', email);
+
+			setIsUserLogged(true);
+
+			await checkTotpPrompt();
+
 			return { success: true };
-		} catch (e) {
-			setError(e.message ?? e.name ?? e);
+		} catch (e: any) {
+			setError(e.message ?? e);
+
+			return { success: false };
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const confirmTotp = async (code: string) => {
+		if (!cognitoUserRef.current) return;
+
+		console.log('[MFA] cognitoUserRef:', cognitoUserRef.current);
+
+		return new Promise((resolve) => {
+			cognitoUserRef.current!.sendMFACode(
+				code,
+				{
+					onSuccess: async (session) => {
+						await SecureStore.setItemAsync('accessToken', session.getAccessToken().getJwtToken());
+
+						await SecureStore.setItemAsync('idToken', session.getIdToken().getJwtToken());
+
+						await SecureStore.setItemAsync('refreshToken', session.getRefreshToken().getToken());
+
+						setIsUserLogged(true);
+						setMfaRequired(false);
+
+						resolve({ success: true });
+					},
+
+					onFailure: (err) => {
+						setError(err.message);
+
+						resolve({ success: false });
+					},
+				},
+				'SOFTWARE_TOKEN_MFA',
+			);
+		});
+	};
+
+	/* -------------------------------------------------------------------------- */
+	/*                               SETUP MFA                                    */
+	/* -------------------------------------------------------------------------- */
+
+	const setupTotp = async () => {
+		const user = userPool.getCurrentUser();
+		if (!user) throw new Error('Usuario no autenticado');
+
+		return new Promise((resolve, reject) => {
+			user.getSession((err) => {
+				if (err) {
+					reject(err);
+					return;
+				}
+
+				user.associateSoftwareToken({
+					associateSecretCode: (secretCode) => {
+						const username = user.getUsername();
+
+						const otpUri = `otpauth://totp/HaulmerApp:${username}?secret=${secretCode}&issuer=HaulmerApp`;
+
+						resolve({
+							secretCode,
+							otpUri,
+						});
+					},
+
+					onFailure: reject,
+				});
+			});
+		});
+	};
+
+	const verifyTotpSetup = async (code: string) => {
+		const user = userPool.getCurrentUser();
+
+		if (!user) throw new Error('User not found');
+
+		return new Promise((resolve, reject) => {
+			user.getSession((err, session) => {
+				if (err || !session?.isValid()) {
+					reject('Session inválida');
+					return;
+				}
+
+				user.verifySoftwareToken(code, 'HaulmerApp', {
+					onSuccess: () => {
+						user.setUserMfaPreference(
+							null,
+							{
+								Enabled: true,
+								PreferredMfa: true,
+							},
+							(err) => {
+								if (err) {
+									reject(err);
+									return;
+								}
+
+								setTotpEnabled(true);
+								console.log('success');
+								resolve({ success: true });
+							},
+						);
+					},
+
+					onFailure: (err) => {
+						console.log('on Failure', err);
+						reject(err);
+					},
+				});
+			});
+		});
+	};
+
+	const register = async (email: string, password: string) => {
+		try {
+			setLoading(true);
+
+			await registerUser(email, password);
+
+			return { success: true };
+		} catch (e: any) {
+			setError(e.message);
+
 			return { success: false };
 		} finally {
 			setLoading(false);
@@ -49,34 +258,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 	const confirmCode = async (email: string, code: string) => {
 		try {
 			setLoading(true);
-			setError(null);
 
 			await confirmUser(email, code);
 
 			return { success: true };
-		} catch (e) {
-			setError(e.message ?? e.name ?? e);
-			return { success: false };
-		} finally {
-			setLoading(false);
-		}
-	};
+		} catch (e: any) {
+			setError(e.message);
 
-	const login = async (email: string, password: string) => {
-		try {
-			setLoading(true);
-			setError(null);
-
-			const tokens = await loginUser(email, password);
-
-			await SecureStore.setItemAsync('accessToken', tokens.accessToken);
-			await SecureStore.setItemAsync('refreshToken', tokens.refreshToken);
-			await SecureStore.setItemAsync('idToken', tokens.idToken);
-			setIsUserLogged(true);
-			return { success: true };
-		} catch (e) {
-			console.log('e', e);
-			setError(e.message ?? e.name ?? e);
 			return { success: false };
 		} finally {
 			setLoading(false);
@@ -85,91 +273,95 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 	const logout = async () => {
 		await logoutUser();
-		setLoading(true);
-		setIsUserLogged(false);
+
 		await SecureStore.deleteItemAsync('accessToken');
 		await SecureStore.deleteItemAsync('refreshToken');
 		await SecureStore.deleteItemAsync('idToken');
-		setLoading(false);
+
+		setIsUserLogged(false);
 	};
 
-	useEffect(() => {
-		checkAndRefreshToken();
-		const subscription = AppState.addEventListener('change', (nextAppState) => {
-			if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-				checkAndRefreshToken();
-			}
-			appState.current = nextAppState;
-		});
-
-		return () => {
-			subscription.remove();
-		};
-	}, []);
-
 	const checkAndRefreshToken = async (): Promise<string | null> => {
-		setIsUserLogged(false);
-		setLoadingSplash(true);
 		const accessToken = await SecureStore.getItemAsync('accessToken');
-		const _refreshToken = await SecureStore.getItemAsync('refreshToken');
+		const refreshToken = await SecureStore.getItemAsync('refreshToken');
 		const idToken = await SecureStore.getItemAsync('idToken');
+		const username = await SecureStore.getItemAsync('username');
 
-		if (!accessToken || !_refreshToken || !idToken) {
-			console.log('[checkAndRefreshToken]: No hay tokens guardados');
-			await logout();
+		if (!accessToken || !refreshToken || !idToken || !username) {
 			setLoadingSplash(false);
 			return null;
 		}
 
 		const now = Math.floor(Date.now() / 1000);
-		const decodedAccess: { exp: number } = jwtDecode(accessToken);
+		const decoded: { exp: number } = jwtDecode(accessToken);
 
-		if (decodedAccess.exp - now > BUFFER) {
-			setTimeout(() => {
-				console.log('[checkAndRefreshToken]: Access token aún válido');
-				setIsUserLogged(true);
-				setLoadingSplash(false);
-			}, 1000);
+		if (decoded.exp - now > BUFFER) {
+			setIsUserLogged(true);
+			setLoadingSplash(false);
+
 			return accessToken;
 		}
-		const decodedId: { sub: string } = jwtDecode(idToken);
-		const cognitoUser = new CognitoUser({ Username: decodedId.sub, Pool: userPool });
-		const refreshToken = new CognitoRefreshToken({ RefreshToken: _refreshToken });
 
-		console.log('Access token expiró, intentando refresh...');
+		const cognitoUser = new CognitoUser({
+			Username: username!,
+			Pool: userPool,
+		});
+
+		const refresh = new CognitoRefreshToken({
+			RefreshToken: refreshToken,
+		});
 
 		return new Promise((resolve) => {
-			cognitoUser.refreshSession(refreshToken, async (err, session) => {
-				if (err) {
-					console.error('[useAuth]: Error refrescando token:', err);
-					logout();
-					return null;
-				}
-
-				// Guardamos nuevos tokens en SecureStore
+			cognitoUser.refreshSession(refresh, async (_, session) => {
 				await SecureStore.setItemAsync('accessToken', session.getAccessToken().getJwtToken());
+
 				await SecureStore.setItemAsync('idToken', session.getIdToken().getJwtToken());
+
 				await SecureStore.setItemAsync('refreshToken', session.getRefreshToken().getToken());
-				console.log('[checkAndRefreshToken]: Token renovado automáticamente');
+
 				setIsUserLogged(true);
-				setTimeout(() => setLoadingSplash(false), 500);
+				setLoadingSplash(false);
+
 				resolve(session.getAccessToken().getJwtToken());
 			});
 		});
 	};
 
+	useEffect(() => {
+		checkAndRefreshToken();
+
+		const subscription = AppState.addEventListener('change', (nextAppState) => {
+			if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+				checkTotpPrompt();
+			}
+
+			appState.current = nextAppState;
+		});
+
+		return () => subscription.remove();
+	}, []);
+
 	return (
 		<AuthContext.Provider
 			value={{
-				register,
-				confirmCode,
 				login,
 				logout,
+				register,
+				confirmCode,
+				confirmTotp,
+				setupTotp,
+				verifyTotpSetup,
+				acceptTotp,
+				declineTotp,
+				checkAndRefreshToken,
+
+				isUserLogged,
 				loading,
 				error,
-				checkAndRefreshToken,
-				isUserLogged,
 				loadingSplash,
+				mfaRequired,
+				showTotpPrompt,
+				totpEnabled,
 			}}
 		>
 			{children}
@@ -179,6 +371,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
 	const context = useContext(AuthContext);
-	if (!context) throw new Error('useAuth must be used within an AuthProvider');
+
+	if (!context) throw new Error('useAuth must be used within AuthProvider');
+
 	return context;
 };
