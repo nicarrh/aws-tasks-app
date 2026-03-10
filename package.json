@@ -20,6 +20,7 @@
 		"axios": "^1.13.6",
 		"babel-plugin-module-resolver": "^5.0.2",
 		"expo": "~55.0.4",
+		"expo-barcode-scanner": "^13.0.1",
 		"expo-constants": "~55.0.7",
 		"expo-device": "~55.0.9",
 		"expo-font": "~55.0.4",
@@ -39,6 +40,7 @@
 		"react-native": "0.83.2",
 		"react-native-dotenv": "^3.4.11",
 		"react-native-gesture-handler": "~2.30.0",
+		"react-native-qrcode-svg": "^6.3.21",
 		"react-native-reanimated": "4.2.1",
 		"react-native-safe-area-context": "~5.6.2",
 		"react-native-screens": "~4.23.0",
@@ -50,6 +52,7 @@
 	"devDependencies": {
 		"@aws-amplify/backend": "^1.21.0",
 		"@aws-amplify/backend-cli": "^1.8.2",
+		"@aws-amplify/cli": "^14.2.5",
 		"@types/react": "~19.2.2",
 		"aws-cdk-lib": "^2.234.1",
 		"constructs": "^10.5.1",
