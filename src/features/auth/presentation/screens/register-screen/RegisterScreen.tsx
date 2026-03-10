@@ -75,7 +75,7 @@ export const RegisterForm = ({ navigation }: RegisterProps) => {
 			<View style={styles.formContent}>
 				<Text style={styles.title}>Crea tu cuenta</Text>
 				<EmailInput value={email} onChangeText={setEmail} name='email' />
-				<PasswordInput value={password} onChangeText={setPassword} name='password' />
+				<PasswordInput value={password} onChangeText={setPassword} name='password' isInRegister />
 				<ConfirmPasswordInput value={confirm} onChangeText={setConfirm} password={password} name='confirm' />
 				<TouchableOpacity
 					style={[styles.button, { backgroundColor: formValid ? colors.primary : '#B0B0B0' }]}
