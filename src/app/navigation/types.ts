@@ -1,6 +1,12 @@
 export type RootStackParamList = {
 	Auth: undefined;
 	App: undefined;
+	Security: undefined;
+};
+
+export type SecurityStackParamList = {
+	SetupTotp: undefined;
+	ConfirmTotp: undefined;
 };
 
 export type AuthStackParamList = {
@@ -8,10 +14,10 @@ export type AuthStackParamList = {
 	Register: undefined;
 	ResetPassword: undefined;
 	ConfirmCode: { email: string };
+	ConfirmTotp: undefined;
 };
 
 export type AppStackParamList = {
 	Tasks: undefined;
-	CreateTask: undefined;
 	Profile: undefined;
 };
