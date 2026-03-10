@@ -21,12 +21,14 @@ Amplify.configure({
 
 export default function App() {
 	return (
-		<NavigationContainer theme={NavigationTheme}>
-			<AuthProvider>
-				<RootNavigator />
-				<ModalTotp />
-			</AuthProvider>
+		<>
+			<NavigationContainer theme={NavigationTheme}>
+				<AuthProvider>
+					<RootNavigator />
+					<ModalTotp />
+				</AuthProvider>
+			</NavigationContainer>
 			<Toast position='bottom' />
-		</NavigationContainer>
+		</>
 	);
 }

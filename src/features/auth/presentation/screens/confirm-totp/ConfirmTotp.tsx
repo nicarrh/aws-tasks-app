@@ -2,6 +2,7 @@ import { useTheme } from '@react-navigation/native';
 import React, { useRef, useState } from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import { useAuth } from '../../../hooks/useAuth';
 
 const ConfirmTotpScreen = () => {
@@ -10,9 +11,21 @@ const ConfirmTotpScreen = () => {
 
 	const { confirmTotp, loading, error } = useAuth();
 	const { colors } = useTheme();
-
+	console.log('confirm top');
 	const handleConfirm = async () => {
-		const result = await confirmTotp(code);
+		try {
+			const result = await confirmTotp(code);
+			Toast.show({
+				type: 'success',
+				text1: 'Código validado con éxito',
+			});
+		} catch (e) {
+			Toast.show({
+				type: 'error',
+				text1: 'Error al validad código',
+				text2: 'Vuelve a intentar',
+			});
+		}
 	};
 
 	const renderBoxes = () => {
