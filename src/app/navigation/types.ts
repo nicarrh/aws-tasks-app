@@ -15,6 +15,7 @@ export type AuthStackParamList = {
 	ResetPassword: undefined;
 	ConfirmCode: { email: string };
 	ConfirmTotp: undefined;
+	ForgotPassword: undefined;
 };
 
 export type AppStackParamList = {

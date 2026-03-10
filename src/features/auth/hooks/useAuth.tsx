@@ -1,10 +1,10 @@
+import { confirmResetPassword, resetPassword } from '@aws-amplify/auth';
 import { useNavigation } from '@react-navigation/native';
 import { CognitoRefreshToken, CognitoUser } from 'amazon-cognito-identity-js';
 import * as SecureStore from 'expo-secure-store';
 import { jwtDecode } from 'jwt-decode';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-
 import { confirmUser, loginUser, logoutUser, registerUser } from '../infraestructure/cognito/auth.repository';
 
 import { userPool } from '../infraestructure/cognito/cognito.config';
@@ -35,6 +35,9 @@ type AuthContextType = {
 	declineTotp: () => Promise<void>;
 
 	checkAndRefreshToken: () => Promise<string | null>;
+
+	forgotPassword: (email: string) => Promise<any>;
+	confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<any>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -327,6 +330,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 		});
 	};
 
+	const forgotPassword = async (email: string) => {
+		try {
+			await resetPassword({
+				username: email,
+			});
+
+			return { success: true };
+		} catch (error: any) {
+			return {
+				success: false,
+				message: error.message,
+			};
+		}
+	};
+
+	const confirmForgotPassword = async (email: string, code: string, newPassword: string) => {
+		try {
+			await confirmResetPassword({
+				username: email,
+				confirmationCode: code,
+				newPassword,
+			});
+
+			return { success: true };
+		} catch (error: any) {
+			return {
+				success: false,
+				message: error.message,
+			};
+		}
+	};
+
 	useEffect(() => {
 		checkAndRefreshToken();
 
@@ -362,6 +397,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 				mfaRequired,
 				showTotpPrompt,
 				totpEnabled,
+
+				forgotPassword,
+				confirmForgotPassword,
 			}}
 		>
 			{children}

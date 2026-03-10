@@ -18,32 +18,34 @@ function LoginForm({ navigation }: LoginProps) {
 	const styles = createStyles(colors);
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
-	const [isLoadingLogin, setisLoadingLogin] = useState(false);
+	const [isLoadingLogin, setIsLoadingLogin] = useState(false);
 
 	const doLoginHandler = async () => {
 		try {
-			setisLoadingLogin(true);
+			setIsLoadingLogin(true);
 			const result = await login(email, password);
 
 			if (result?.mfaRequired) {
-				setisLoadingLogin(false);
 				navigation.navigate('ConfirmTotp');
 				return;
+			}
+
+			if (result?.success) {
+				// Login exitoso, RootNavigator lo manejará
 			}
 		} catch (e) {
 			console.error(e);
 		} finally {
-			setisLoadingLogin(false);
+			setIsLoadingLogin(false);
 		}
 	};
-	const changeEmailHandler = (t: string) => {
-		setEmail(t);
-	};
-	const changePasswordHandler = (t: string) => {
-		setPassword(t);
-	};
+
 	const goToRegisterScreen = () => {
 		navigation.navigate('Register');
+	};
+
+	const goToForgotPassword = () => {
+		navigation.navigate('ForgotPassword');
 	};
 
 	useEffect(() => {
@@ -51,7 +53,7 @@ function LoginForm({ navigation }: LoginProps) {
 			Toast.show({
 				type: 'error',
 				text1: 'Se ha producido un error',
-				text2: 'vuelva a intentar',
+				text2: error,
 			});
 		}
 	}, [error]);
@@ -60,11 +62,15 @@ function LoginForm({ navigation }: LoginProps) {
 		<View style={styles.container}>
 			<View style={styles.content}>
 				<View style={styles.spacing}>
-					<EmailInput value={email} onChangeText={changeEmailHandler} name='email' />
+					<EmailInput value={email} onChangeText={setEmail} name='email' />
 				</View>
 				<View style={styles.spacing}>
-					<PasswordInput value={password} onChangeText={changePasswordHandler} name='password' />
+					<PasswordInput value={password} onChangeText={setPassword} name='password' />
 				</View>
+
+				<TouchableOpacity onPress={goToForgotPassword} style={{ alignSelf: 'flex-end', marginBottom: 20 }}>
+					<Text style={{ color: colors.primary, fontWeight: '500' }}>¿Olvidaste tu contraseña?</Text>
+				</TouchableOpacity>
 
 				<View style={styles.buttons}>
 					<TouchableOpacity
@@ -78,12 +84,12 @@ function LoginForm({ navigation }: LoginProps) {
 							<Text style={styles.btnText}>Continuar</Text>
 						)}
 					</TouchableOpacity>
+
 					<TouchableOpacity style={styles.btnRegister} onPress={goToRegisterScreen}>
 						<Text style={styles.btnRegisterText}>Registrarme</Text>
 					</TouchableOpacity>
 				</View>
 			</View>
-			<Toast position='bottom' />
 		</View>
 	);
 }

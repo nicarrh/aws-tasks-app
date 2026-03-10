@@ -1,4 +1,11 @@
-import { ConfirmCodeScreen, ConfirmTotpScreen, LoginScreen, RegisterScreen } from '@auth';
+import {
+	ConfirmCodeScreen,
+	ConfirmTotpScreen,
+	ForgotPasswordScreen,
+	LoginScreen,
+	RegisterScreen,
+	ResetPasswordScreen,
+} from '@auth';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TouchableOpacity } from 'react-native';
@@ -23,6 +30,9 @@ export default function AuthNavigator() {
 				}}
 			/>
 			<Stack.Screen name='ConfirmTotp' component={ConfirmTotpScreen} />
+			<Stack.Screen name='ForgotPassword' component={ForgotPasswordScreen} />
+
+			<Stack.Screen name='ResetPassword' component={ResetPasswordScreen} />
 		</Stack.Navigator>
 	);
 }
