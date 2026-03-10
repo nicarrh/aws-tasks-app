@@ -17,15 +17,10 @@ export const createAuthClient = (base: BaseUrls): AxiosInstance => {
 	instance.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 		const token = await getValidAccessToken();
 		if (!token) throw new Error('Token expirado');
-
-		// ✅ Asegurarse de que headers exista
 		if (!config.headers) {
 			config.headers = {} as AxiosRequestHeaders;
 		}
-
-		// ✅ Asignar Authorization de forma segura
 		(config.headers as AxiosRequestHeaders)['Authorization'] = `Bearer ${token}`;
-		console.log('config', config);
 		return config;
 	});
 
