@@ -7,6 +7,16 @@ type CognitoTokens = {
 	refreshToken: string;
 };
 
+export type LoginResult =
+	| {
+			type: 'SUCCESS';
+			tokens: CognitoTokens;
+	  }
+	| {
+			type: 'MFA_REQUIRED';
+			cognitoUser: CognitoUser;
+	  };
+
 export const registerUser = (email: string, password: string): Promise<any> => {
 	const attributes = [
 		new CognitoUserAttribute({
@@ -43,7 +53,7 @@ export const confirmUser = (email: string, code: string) => {
 };
 
 export const loginUser = (email: string, password: string) => {
-	return new Promise<CognitoTokens>((resolve, reject) => {
+	return new Promise<LoginResult>((resolve, reject) => {
 		const authenticationDetails = new AuthenticationDetails({
 			Username: email,
 			Password: password,
@@ -57,9 +67,12 @@ export const loginUser = (email: string, password: string) => {
 		cognitoUser.authenticateUser(authenticationDetails, {
 			onSuccess: (session) => {
 				resolve({
-					accessToken: session.getAccessToken().getJwtToken(),
-					idToken: session.getIdToken().getJwtToken(),
-					refreshToken: session.getRefreshToken().getToken(),
+					type: 'SUCCESS',
+					tokens: {
+						accessToken: session.getAccessToken().getJwtToken(),
+						idToken: session.getIdToken().getJwtToken(),
+						refreshToken: session.getRefreshToken().getToken(),
+					},
 				});
 			},
 
@@ -67,13 +80,28 @@ export const loginUser = (email: string, password: string) => {
 				reject(err);
 			},
 
+			totpRequired: () => {
+				console.log('[Cognito] TOTP requerido');
+				resolve({
+					type: 'MFA_REQUIRED',
+					cognitoUser,
+				});
+			},
+
+			mfaRequired: () => {
+				console.log('[Cognito] MFA requerido');
+				resolve({
+					type: 'MFA_REQUIRED',
+					cognitoUser,
+				});
+			},
+
 			newPasswordRequired: () => {
-				reject(new Error('New password required'));
+				reject(new Error('NEW_PASSWORD_REQUIRED'));
 			},
 		});
 	});
 };
-
 export const logoutUser = () => {
 	const cognitoUser = userPool.getCurrentUser();
 
