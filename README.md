@@ -101,7 +101,39 @@ yarn ios
 
 ---
 
-## Rutas
+## Users API
+
+> Nota: Las rutas de usuario **no requieren token de autenticación**.
+
+| Ruta              | Método | Descripción                                                              |
+| ----------------- | ------ | ------------------------------------------------------------------------ |
+| `/users`          | GET    | Obtiene la lista de todos los usuarios registrados.                      |
+| `/users`          | POST   | Crea un nuevo usuario. Se deben enviar los datos del usuario en el body. |
+| `/users/{userId}` | GET    | Obtiene la información de un usuario específico por su ID.               |
+
+---
+
+## Tasks API
+
+> Nota: Todas las rutas de tareas requieren **header Authorization** con un token JWT válido.
+
+| Ruta              | Método | Descripción                                          |
+| ----------------- | ------ | ---------------------------------------------------- |
+| `/tasks`          | POST   | Crea una nueva tarea para el usuario autenticado.    |
+| `/tasks`          | GET    | Obtiene todas las tareas del usuario autenticado.    |
+| `/tasks/{taskId}` | GET    | Obtiene los detalles de una tarea específica por ID. |
+| `/tasks/{taskId}` | PUT    | Actualiza los datos de una tarea existente.          |
+| `/tasks/{taskId}` | DELETE | Elimina una tarea existente.                         |
+
+---
+
+### Recomendaciones de uso
+
+1. Para las rutas de **Tasks**, siempre incluir el header:
+
+```http
+Authorization: Bearer <token_jwt>
+```
 
 ---
 
