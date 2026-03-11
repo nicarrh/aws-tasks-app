@@ -1,7 +1,10 @@
 export type RootStackParamList = {
 	Auth: undefined;
 	App: undefined;
-	Security: undefined;
+	Security: {
+		screen: keyof SecurityStackParamList;
+		params?: undefined;
+	};
 };
 
 export type SecurityStackParamList = {
