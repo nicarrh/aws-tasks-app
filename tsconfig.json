@@ -3,6 +3,7 @@
 	"compilerOptions": {
 		"strict": true,
 		"baseUrl": ".",
+		"types": ["jest", "node", "react", "react-native"],
 		"paths": {
 			"@/*": ["./src/*"],
 			"@navigation": ["src/app/navigation/index.ts"],
@@ -13,7 +14,8 @@
 			"@shared": ["src/shared/index.ts"],
 			"@/assets/*": ["./assets/*"]
 		},
+
 		"typeRoots": ["./node_modules/@types", "./src/types"]
 	},
-	"include": ["**/*.ts", "**/*.tsx"]
+	"include": ["**/*.ts", "**/*.tsx", "src/features/auth/hooks/__mocks__/expo-secure-store.js", "jest-setup.js"]
 }
