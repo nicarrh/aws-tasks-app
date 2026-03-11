@@ -1,56 +1,117 @@
-# Welcome to your Expo app 👋
+# Proyecto Auth con AWS Cognito y React Native
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Bueno, este proyecto es básicamente un ejemplo de como conectar **AWS Cognito** con **React Native** usando `amazon-cognito-identity-js` y `aws-amplify`.
+Tiene un hook `useAuth` que maneja login, logout, registro, refresh de tokens y MFA.
+A su vez tambien conectamos dos BBDD de dynamo mediante lambdas para ejecutar acciones basicas en las rutas que se necesitan, que las detallare mas adelante.
 
-## Get started
+---
 
-1. Install dependencies
+## 1. Crear User Pool y App Client en AWS Cognito
 
-   ```bash
-   npm install
-   ```
+1. Entrar a la consola de **AWS Cognito** y crear un **User Pool**.
+2. Durante la creación:
 
-2. Start the app
+   - En **Authentication flows**, activé **SRP (Secure Remote Password)** y **Password**, asi se puede loguear con password normal y SRP.
+   - Si usas **Hosted UI**, poner las **Allowed Callback URLs** y **Sign out URLs** que va a usar tu app (por ejemplo `exp://localhost:19000` o la url de Expo).
 
-   ```bash
-   npx expo start
-   ```
+3. Copiar el **User Pool ID** y **App Client ID**, los vamos a usar en el `.env`.
 
-In the output, you'll find options to open the app in a
+> La doc de AWS explica todo esto: [https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools.html](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools.html)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+---
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## 2. Configuración de Amplify / amazon-cognito-identity-js
 
-## Get a fresh project
+- Se usa:
 
-When you're ready, run:
+  - `aws-amplify` v6.x
+  - `amazon-cognito-identity-js` v6.x
+  - `@aws-amplify/react-native` v1.x
 
-```bash
-npm run reset-project
+- Configuración rápida en `App.tsx`:
+
+```ts
+Amplify.configure({
+	Auth: {
+		Cognito: {
+			userPoolId: process.env.USER_POOL_ID,
+			userPoolClientId: process.env.USER_POOL_CLIENT_ID,
+			signUpVerificationMethod: 'code',
+		},
+	},
+});
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+> Si quieres usar solo `amazon-cognito-identity-js`, recomiendan v6.x para no tener problemas con RN 0.83+.
 
-### Other setup steps
+---
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## 3. Seguridad
 
-## Learn more
+- **Almacenamiento seguro:** se usa `expo-secure-store` para guardar los tokens (`accessToken`, `idToken`, `refreshToken`).
+- **Expiración / refresh:** el hook `useAuth` revisa los tokens al iniciar y refresca automaticamente con el refresh token.
+- **PII:** no se guarda ni loguea el password completo. Solo lo minimo necesario para auth.
 
-To learn more about developing your project with Expo, look at the following resources:
+---
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 4. Iniciar el proyecto
 
-## Join the community
+1. Clonar repo:
 
-Join our community of developers creating universal apps.
+```bash
+git clone https://github.com/nicarrh/aws-tasks-app.git
+cd aws-tasks-app
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+2. Copiar `.env.example` a `.env` y completar con tus claves:
+
+```bash
+cp .env.example .env
+```
+
+- Poner `USER_POOL_ID` y `USER_POOL_CLIENT_ID`.
+
+3. Instalar dependencias:
+
+```bash
+yarn
+```
+
+4. Usar Node v24 (o >= 24) para evitar errores de crypto y Amplify.
+
+5. Correr Expo:
+
+```bash
+yarn start
+```
+
+- Para Android/iOS:
+
+```bash
+yarn android
+yarn ios
+```
+
+---
+
+## 5. Tests
+
+- Hay tests basicos con `@testing-library/react-native`.
+- Lo necesario esta mockeado para que corran bien los tests.
+
+---
+
+## Rutas
+
+---
+
+## Notas
+
+- Nunca subir `.env` al repo.
+- Esta base sirve para apps con login seguro, MFA, refresh de tokens y manejo de sesiones.
+- Faltan algunas cosas, tipo mejor manejo de errores de MFA y NEW_PASSWORD_REQUIRED, pero el flujo principal funciona.
+
+---
+
+Principalmente la app se base en la autenticación con cognito, el CRUD para las tareas y la implementación de los diferentes flujos.
+Como Recuperar contraseña, validar mediante código el login.
