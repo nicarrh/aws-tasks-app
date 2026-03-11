@@ -1,12 +1,13 @@
 import { confirmResetPassword, resetPassword } from '@aws-amplify/auth';
-import { useNavigation } from '@react-navigation/native';
+import { NavigationProp, useNavigation } from '@react-navigation/native';
 import { CognitoRefreshToken, CognitoUser } from 'amazon-cognito-identity-js';
-import * as SecureStore from 'expo-secure-store';
+import { deleteItemAsync, getItemAsync, setItemAsync } from 'expo-secure-store';
 import { jwtDecode } from 'jwt-decode';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { confirmUser, loginUser, logoutUser, registerUser } from '../infraestructure/cognito/auth.repository';
 
+import { RootStackParamList } from '@/app/navigation/types';
 import { userPool } from '../infraestructure/cognito/cognito.config';
 
 const BUFFER = 120;
@@ -43,7 +44,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-	const navigation = useNavigation();
+	const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
 	const [loading, setLoading] = useState(false);
 	const [loadingSplash, setLoadingSplash] = useState(true);
@@ -59,7 +60,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 	const appState = useRef<AppStateStatus>(AppState.currentState);
 
 	const checkTotpPrompt = async () => {
-		const lastShown = await SecureStore.getItemAsync('totpPromptLastShown');
+		const lastShown = await getItemAsync('totpPromptLastShown');
 
 		if (lastShown) {
 			const diff = Date.now() - Number(lastShown);
@@ -83,7 +84,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 	};
 
 	const acceptTotp = async () => {
-		await SecureStore.setItemAsync('totpPromptLastShown', Date.now().toString());
+		await setItemAsync('totpPromptLastShown', Date.now().toString());
 
 		setShowTotpPrompt(false);
 
@@ -93,7 +94,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 	};
 
 	const declineTotp = async () => {
-		await SecureStore.setItemAsync('totpPromptLastShown', Date.now().toString());
+		await setItemAsync('totpPromptLastShown', Date.now().toString());
 
 		setShowTotpPrompt(false);
 	};
@@ -115,18 +116,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 			const tokens = result.tokens;
 
-			await SecureStore.setItemAsync('accessToken', tokens.accessToken);
-			await SecureStore.setItemAsync('refreshToken', tokens.refreshToken);
-			await SecureStore.setItemAsync('idToken', tokens.idToken);
-			await SecureStore.setItemAsync('username', email);
+			await setItemAsync('accessToken', tokens.accessToken);
+			await setItemAsync('refreshToken', tokens.refreshToken);
+			await setItemAsync('idToken', tokens.idToken);
+			await setItemAsync('username', email);
 
 			setIsUserLogged(true);
 
 			await checkTotpPrompt();
 
 			return { success: true };
-		} catch (e: any) {
-			setError(e.message ?? e);
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		} catch (e) {
+			if (e instanceof Error) {
+				setError(e.message);
+			} else {
+				setError(String(e));
+			}
 
 			return { success: false };
 		} finally {
@@ -144,11 +150,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 				code,
 				{
 					onSuccess: async (session) => {
-						await SecureStore.setItemAsync('accessToken', session.getAccessToken().getJwtToken());
+						await setItemAsync('accessToken', session.getAccessToken().getJwtToken());
 
-						await SecureStore.setItemAsync('idToken', session.getIdToken().getJwtToken());
+						await setItemAsync('idToken', session.getIdToken().getJwtToken());
 
-						await SecureStore.setItemAsync('refreshToken', session.getRefreshToken().getToken());
+						await setItemAsync('refreshToken', session.getRefreshToken().getToken());
 
 						setIsUserLogged(true);
 						setMfaRequired(false);
@@ -176,7 +182,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 		if (!user) throw new Error('Usuario no autenticado');
 
 		return new Promise((resolve, reject) => {
-			user.getSession((err) => {
+			user.getSession((err: any) => {
 				if (err) {
 					reject(err);
 					return;
@@ -206,7 +212,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 		if (!user) throw new Error('User not found');
 
 		return new Promise((resolve, reject) => {
-			user.getSession((err, session) => {
+			user.getSession((err: any, session: any) => {
 				if (err || !session?.isValid()) {
 					reject('Session inválida');
 					return;
@@ -249,10 +255,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 			await registerUser(email, password);
 
 			return { success: true };
-		} catch (e: any) {
-			setError(e.message);
-
-			return { success: false };
+		} catch (e) {
+			let error = {} as any;
+			if (e instanceof Error) {
+				error = e.message;
+			} else {
+				error = String(e);
+			}
+			setError(error);
+			return {
+				success: false,
+				message: error,
+			};
 		} finally {
 			setLoading(false);
 		}
@@ -265,8 +279,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 			await confirmUser(email, code);
 
 			return { success: true };
-		} catch (e: any) {
-			setError(e.message);
+		} catch (e) {
+			if (e instanceof Error) {
+				setError(e.message);
+			} else {
+				setError(String(e));
+			}
 
 			return { success: false };
 		} finally {
@@ -277,18 +295,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 	const logout = async () => {
 		await logoutUser();
 
-		await SecureStore.deleteItemAsync('accessToken');
-		await SecureStore.deleteItemAsync('refreshToken');
-		await SecureStore.deleteItemAsync('idToken');
+		await deleteItemAsync('accessToken');
+		await deleteItemAsync('refreshToken');
+		await deleteItemAsync('idToken');
 
 		setIsUserLogged(false);
 	};
 
 	const checkAndRefreshToken = async (): Promise<string | null> => {
-		const accessToken = await SecureStore.getItemAsync('accessToken');
-		const refreshToken = await SecureStore.getItemAsync('refreshToken');
-		const idToken = await SecureStore.getItemAsync('idToken');
-		const username = await SecureStore.getItemAsync('username');
+		const accessToken = await getItemAsync('accessToken');
+		const refreshToken = await getItemAsync('refreshToken');
+		const idToken = await getItemAsync('idToken');
+		const username = await getItemAsync('username');
 
 		if (!accessToken || !refreshToken || !idToken || !username) {
 			setLoadingSplash(false);
@@ -316,11 +334,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 		return new Promise((resolve) => {
 			cognitoUser.refreshSession(refresh, async (_, session) => {
-				await SecureStore.setItemAsync('accessToken', session.getAccessToken().getJwtToken());
+				await setItemAsync('accessToken', session.getAccessToken().getJwtToken());
 
-				await SecureStore.setItemAsync('idToken', session.getIdToken().getJwtToken());
+				await setItemAsync('idToken', session.getIdToken().getJwtToken());
 
-				await SecureStore.setItemAsync('refreshToken', session.getRefreshToken().getToken());
+				await setItemAsync('refreshToken', session.getRefreshToken().getToken());
 
 				setIsUserLogged(true);
 				setLoadingSplash(false);
@@ -337,10 +355,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 			});
 
 			return { success: true };
-		} catch (error: any) {
+		} catch (e) {
+			let error = {} as any;
+			if (e instanceof Error) {
+				error = e.message;
+			} else {
+				error = String(e);
+			}
 			return {
 				success: false,
-				message: error.message,
+				message: error,
 			};
 		}
 	};
@@ -354,10 +378,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 			});
 
 			return { success: true };
-		} catch (error: any) {
+		} catch (e) {
+			let error = {} as any;
+			if (e instanceof Error) {
+				error = e.message;
+			} else {
+				error = String(e);
+			}
 			return {
 				success: false,
-				message: error.message,
+				message: error,
 			};
 		}
 	};
